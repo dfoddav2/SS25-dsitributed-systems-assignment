@@ -1,0 +1,18 @@
+services:
+  transaction_service:
+    build:
+      context: ./transaction_service
+      dockerfile: Dockerfile
+    ports:
+      - "${TRANSACTION_SERVICE_PORT:-8000}:8000"
+    env_file:
+      - ./transaction_service/.env
+
+  authentication_service:
+    build:
+      context: ./authentication_service
+      dockerfile: Dockerfile
+    ports:
+      - "${AUTHENTICATION_SERVICE_PORT:-8001}:8001"
+    env_file:
+      - ./authentication_service/.env
