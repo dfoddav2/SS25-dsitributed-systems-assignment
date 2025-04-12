@@ -1,75 +1,11 @@
-import { JWTPayload, jwtVerify, SignJWT } from "npm:jose";
 import { DatabaseSync } from "node:sqlite";
+import seedDatabase from "./utils/seed.ts";
+import { createJWT, verifyJWT } from "./utils/jwt.ts";
+import { User } from "./types.ts";
 
-enum UserRole {
-  ADMIN = "administrator",
-  AGENT = "agent",
-  SECRETARY = "secretary",
-}
-
-type User = {
-  id: number;
-  username: string;
-  password: string;
-  role: UserRole;
-};
-
-// Initialize the database
+// Initialize and seed the database
 export const db = new DatabaseSync("users.db");
-db.exec(`
-  CREATE TABLE IF NOT EXISTS user (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT NOT NULL
-  );
-`);
-
-const users = [
-  { id: 1, username: "admin", password: "secret", role: UserRole.ADMIN },
-  { id: 2, username: "agent", password: "secret", role: UserRole.AGENT },
-  {
-    id: 3,
-    username: "secretary",
-    password: "secret",
-    role: UserRole.SECRETARY,
-  },
-];
-// Insert some initial users
-for (const user of users) {
-  db.exec(`
-    INSERT INTO user (username, password, role)
-    VALUES ('${user.username}', '${user.password}', '${user.role}');
-  `);
-}
-
-// Initialize JWT secret key from environment variable
-const secretKey = new TextEncoder().encode(Deno.env.get("JWT_SECRET"));
-if (!secretKey) {
-  throw new Error("JWT_SECRET environment variable is required");
-  // Deno.exit(1);
-}
-const jwtExpiry = Deno.env.get("JWT_EXPIRY") || "1h";
-if (!jwtExpiry) {
-  throw new Error("JWT_EXPIRY environment variable is required");
-  // Deno.exit(1);
-}
-
-// JWT Creation logic
-async function createJWT(payload: JWTPayload): Promise<string> {
-  return await new SignJWT(payload)
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime(jwtExpiry)
-    .sign(secretKey);
-}
-
-// JWT Verification logic
-async function verifyJWT(token: string): Promise<JWTPayload | null> {
-  const { payload } = await jwtVerify(token, secretKey);
-  console.log("JWT is valid:", payload);
-  return payload;
-}
+seedDatabase(db);
 
 // Create handler function
 const handler = async (req: Request): Promise<Response> => {

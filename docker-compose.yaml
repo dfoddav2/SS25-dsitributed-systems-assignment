@@ -3,6 +3,7 @@ services:
     build:
       context: ./transaction_service
       dockerfile: Dockerfile
+    image: dfoddav/transaction_service:latest
     ports:
       - "${TRANSACTION_SERVICE_PORT:-8000}:8000"
     env_file:
@@ -12,6 +13,7 @@ services:
     build:
       context: ./authentication_service
       dockerfile: Dockerfile
+    image: dfoddav/authentication_service:latest
     ports:
       - "${AUTHENTICATION_SERVICE_PORT:-8001}:8001"
     env_file:
