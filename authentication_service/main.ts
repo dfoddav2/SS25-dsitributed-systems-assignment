@@ -29,10 +29,16 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       const token = await createJWT({ id: user.id, role: user.role });
-      return new Response(JSON.stringify({ token }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          user: { id: user.id, username: user.username, role: user.role },
+          token: token,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     } catch (error) {
       if (error instanceof Error) {
         return new Response(

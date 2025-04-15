@@ -79,6 +79,11 @@ app.doc("/doc", {
     title: "Transactions API",
   },
 });
+app.get("/", (c) => {
+  return c.text(
+    "Welcome to the Transactions API!\n\nSee `/ui` for the Swagger UI."
+  );
+});
 
 // Routes
 app.route("/transactions", transactions);

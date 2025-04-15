@@ -12,13 +12,29 @@ export default function seedDatabase(db: DatabaseSync) {
             );
           `);
 
+    // Delete all existing users from the table
+    db.exec(`DELETE FROM user;`);
+
+    // Reset autoincrement counters
+    db.exec(`DELETE FROM sqlite_sequence WHERE name='user'`);
+
     const users = [
-      { id: 1, username: "admin", password: "secret", role: UserRole.ADMIN },
-      { id: 2, username: "agent", password: "secret", role: UserRole.AGENT },
+      {
+        id: 1,
+        username: "admin",
+        password: "password123",
+        role: UserRole.ADMIN,
+      },
+      {
+        id: 2,
+        username: "agent",
+        password: "password123",
+        role: UserRole.AGENT,
+      },
       {
         id: 3,
         username: "secretary",
-        password: "secret",
+        password: "password123",
         role: UserRole.SECRETARY,
       },
     ];
