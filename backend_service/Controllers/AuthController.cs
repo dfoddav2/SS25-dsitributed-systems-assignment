@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http;
-using BackendService.Models;
+using BackendService.Auth.Models;
 
 [ApiController]
 [Route("auth")]
@@ -32,4 +32,5 @@ public class AuthController : ControllerBase
             return StatusCode((int)response.StatusCode, await response.Content.ReadAsStringAsync());
         }
     }
+
 }

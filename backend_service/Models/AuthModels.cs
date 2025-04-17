@@ -1,4 +1,4 @@
-namespace BackendService.Models
+namespace BackendService.Auth.Models
 {
     using System.ComponentModel;
     using System.Text.Json.Serialization;

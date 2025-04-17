@@ -40,9 +40,9 @@ export default function seedDatabase(db: DatabaseSync) {
     db.exec(`
     INSERT INTO transactions (customer_id, vendor_id, timestamp, status, amount)
     VALUES
-      (1, 1, '2023-01-01T12:00:00Z', 'completed', 100.0),
-      (2, 2, '2023-01-02T12:00:00Z', 'completed', 200.0),
-      (3, 3, '2023-01-03T12:00:00Z', 'completed', 300.0);
+      (1, 1, '2023-01-01T12:00:00Z', 'accepted', 100.0),
+      (2, 2, '2023-01-02T12:00:00Z', 'accepted', 200.0),
+      (3, 3, '2023-01-03T12:00:00Z', 'accepted', 300.0);
   `);
 
     // Insert sample data into the result table

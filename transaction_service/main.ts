@@ -85,6 +85,37 @@ app.get("/", (c) => {
   );
 });
 
+// Middleware - Only allow authenticated AGENT and ADMINISTRATOR users to access the transactions routes
+app.use("/transactions/*", async (c, next) => {
+  console.log("\n--- Middleware for /transactions/* ---");
+  const authHeader = c.req.header("Authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    // Forward the auth header to the authentication service
+    const response = await fetch("http://localhost:8001/verify", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      // console.log("User verified:", data);
+      if (data.role !== "agent" && data.role !== "administrator") {
+        console.log("User role is not allowed:", data.role);
+        return c.json({ message: "Forbidden" }, 403);
+      }
+      await next();
+    } else {
+      console.log("User verification failed:", response.status);
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+  } else {
+    console.log("No token found in Authorization header");
+    return c.json({ message: "Unauthorized" }, 401);
+  }
+});
+
 // Routes
 app.route("/transactions", transactions);
 app.route("/", app);

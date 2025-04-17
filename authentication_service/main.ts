@@ -60,14 +60,37 @@ const handler = async (req: Request): Promise<Response> => {
   // Verify endpoint
   if (pathname === "/verify" && req.method === "POST") {
     try {
-      const { token } = await req.json();
+      // console.log("\nVerifying JWT...");
+      const token = req.headers.get("Authorization")?.split(" ")[1];
+      if (!token) {
+        return new Response(
+          JSON.stringify({
+            message: "Unauthorized",
+            error: "Token missing from header",
+          }),
+          { status: 401, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      // console.log("-> Token:", token);
+      // Verify the JWT token and return the payload if successfull
       const payload = await verifyJWT(token);
+      // console.log("-> Payload:", payload);
 
+      if (!payload) {
+        return new Response(
+          JSON.stringify({
+            message: "Unauthorized",
+            error: "Token is invalid",
+          }),
+          { status: 401, headers: { "Content-Type": "application/json" } }
+        );
+      }
       return new Response(JSON.stringify({ ...payload }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     } catch (error) {
+      // console.error("\n\nJWT verification failed:", error);
       if (error instanceof Error) {
         if (error.name === "JWTExpired") {
           return new Response(
@@ -85,20 +108,23 @@ const handler = async (req: Request): Promise<Response> => {
             }),
             { status: 401, headers: { "Content-Type": "application/json" } }
           );
+        } else {
+          return new Response(
+            JSON.stringify({ message: "Unauthorized", error: error.message }),
+            { status: 401, headers: { "Content-Type": "application/json" } }
+          );
         }
-        return new Response(
-          JSON.stringify({ message: "Bad Request", error: error.message }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        );
-      } else {
-        return new Response(
-          JSON.stringify({ message: "Something went wrong" }),
-          {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
       }
+      return new Response(
+        JSON.stringify({
+          message: "Something went wrong",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
   }
 
@@ -125,11 +151,19 @@ function loggerMiddleware(
     }
 
     console.log("\n\n--->\nIncoming Request:");
-    console.log("  Source:", source);
+    if (source !== "unknown") {
+      console.log("  Source:", source);
+    }
+    if (parsedUrl.search) {
+      console.log("  Query:", parsedUrl.search);
+    }
+    console.log("  URL:", parsedUrl.href);
     console.log("  Destination:", parsedUrl.pathname);
     console.log("  Method:", method);
     console.log("  Headers:", Object.fromEntries(req.headers));
-    console.log("  Message Body:", messageBody);
+    if (messageBody) {
+      console.log("  Body:", messageBody);
+    }
 
     // Call the actual handler
     const response = await handler(req);

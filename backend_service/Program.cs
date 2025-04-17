@@ -15,12 +15,16 @@ builder.Services.AddHttpLogging(logging =>
 // Set up Controller services
 builder.Services.AddControllers();
 
-// Set up HTTP client for AuthService
-// - This client will be used to communicate with the authentication service
-// - The base address is set to the authentication service's URL
+// Set up HTTP client for AuthService and TransactionService
+// - This client will be used to communicate with the authentication service and transaction service
+// - The base address is set to the service's URL
 builder.Services.AddHttpClient("AuthService", client =>
 {
     client.BaseAddress = new Uri("http://localhost:8001/");
+});
+builder.Services.AddHttpClient("TransactionService", client =>
+{
+    client.BaseAddress = new Uri("http://localhost:8000/");
 });
 
 var app = builder.Build();

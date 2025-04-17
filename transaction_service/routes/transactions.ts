@@ -94,6 +94,14 @@ const createTransactionRoute = createRoute({
       },
       description: "Vendor or customer not found",
     },
+    400: {
+      content: {
+        "application/json": {
+          schema: ErrorSchema,
+        },
+      },
+      description: "Validation Error",
+    },
     500: {
       content: {
         "application/json": {
@@ -104,29 +112,46 @@ const createTransactionRoute = createRoute({
     },
   },
 });
-transactions.openapi(createTransactionRoute, (c) => {
-  const { customer_id, vendor_id, timestamp, status, amount } =
-    c.req.valid("json");
-  // TODO: Here we could additionally check that user and vendor exist
-  const stmt = db.prepare(
-    "INSERT INTO transactions (customer_id, vendor_id, timestamp, status, amount) VALUES (?, ?, ?, ?, ?)"
-  );
-  const info = stmt.run(customer_id, vendor_id, timestamp, status, amount);
+transactions.openapi(createTransactionRoute, async (c) => {
+  const body = await c.req.json(); // Get the JSON body
+  try {
+    console.log("Received body:", body); // Log the received body
+    const validatedData = transactionCreateSchema.parse(body); // Validate the data
 
-  if (info.changes > 0) {
-    try {
-      const row = db
-        .prepare("SELECT * FROM transactions WHERE id = ?")
-        .get(info.lastInsertRowid) as Transaction;
-      const validatedRow = transactionResponseSchema.parse(row);
-      return c.json(validatedRow, 201);
-    } catch (error) {
-      console.error("Validation error:", error);
-      return c.json({ message: "Transaction data invalid" }, 500);
+    const { customer_id, vendor_id, timestamp, status, amount } = validatedData;
+
+    // TODO: Here we could additionally check that user and vendor exist
+    const stmt = db.prepare(
+      "INSERT INTO transactions (customer_id, vendor_id, timestamp, status, amount) VALUES (?, ?, ?, ?, ?)"
+    );
+    const info = stmt.run(customer_id, vendor_id, timestamp, status, amount);
+
+    if (info.changes > 0) {
+      try {
+        const row = db
+          .prepare("SELECT * FROM transactions WHERE id = ?")
+          .get(info.lastInsertRowid) as Transaction;
+        const validatedRow = transactionResponseSchema.parse(row);
+        console.log("Transaction created:", validatedRow);
+        return c.json(validatedRow, 201);
+      } catch (error) {
+        console.error("Validation error:", error);
+        return c.json({ message: "Transaction data invalid" }, 400);
+      }
+    } else {
+      // Handle the case where the insertion failed
+      return c.json({ message: "Transaction creation failed" }, 500);
     }
-  } else {
-    // Handle the case where the insertion failed
-    return c.json({ message: "Transaction creation failed" }, 500);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error("Validation error:", error.errors); // Log the Zod errors
+      return c.json({ message: "Transaction data invalid" }, 400); // Return the errors in the response
+    } else if (error instanceof Error) {
+      console.error("Unexpected error:", error.message);
+      return c.json({ message: "Unexpected error" }, 500);
+    } else {
+      return c.json({ message: "Unexpected error" }, 500);
+    }
   }
 });
 

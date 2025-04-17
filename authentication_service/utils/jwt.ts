@@ -37,7 +37,7 @@ export async function verifyJWT(token: string): Promise<JWTPayload | null> {
     console.log("JWT is valid:", payload);
     return payload;
   } catch (error) {
-    console.error("JWT verification failed:", error);
-    return null;
+    // console.error("JWT verification failed:", error);
+    throw error;
   }
 }

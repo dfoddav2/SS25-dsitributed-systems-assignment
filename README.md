@@ -40,6 +40,12 @@ To read more about this service, visit its [README file](./authentication_servic
 
 ### Transaction Service
 
-Acts as the main business logic and orchestrator of the whole application. Handles any CRUD operations related to transactions and predicted results of whether the given transaction is fraudulent or not. Exposes API for the frontend of end users to monitor and act upon predictions provided by the fraud detection service.
+Acts as the main business logic and orchestrator of the whole application. Handles any CRUD operations related to transactions and predicted results of whether the given transaction is fraudulent or not. Exposes API for the frontend of end users to monitor and act upon predictions provided by the fraud detection service. Also exposes a Swagger UI interface for easy interaction.
 
 To read more about this service, visit its [README file](./transaction_service/README.md).
+
+### Backend Service
+
+The backend service is responsible for handling all interactions with the user through the frontend API. It exposes endpoints for the user to interact with the application and forwards those requests to their respective services to be handled, either the `Authentication Service` or the `Transaction Service`. Also exposes a Scalar UI interface for easy interaction and testing.
+
+To read more about this service, visit its [README file](./backend_service/README.md).

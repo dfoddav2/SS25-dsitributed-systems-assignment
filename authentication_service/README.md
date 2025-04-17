@@ -6,7 +6,7 @@ The authentication service acts as a gateway that is called by middlewares of ot
 
 ## How to run
 
-To only run this service you can start it via the included `Dockerfile` or manually, given you have the  `Deno` runtime installed, by running:
+To only run this service you can start it via the included `Dockerfile` or manually, given you have the `Deno` runtime installed, by running:
 
 ```bash
 deno run dev
