@@ -37,14 +37,10 @@ builder.Services.AddHttpClient("TransactionService", client =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    // Add OpenAPI documentation and Scalar UI
-    app.MapOpenApi();
-    app.MapScalarApiReference("/ui");
-    app.UseHttpLogging();
-}
+// Probably should not be used for production
+app.MapOpenApi();
+app.MapScalarApiReference("/ui");
+app.UseHttpLogging();
 
 app.UseHttpsRedirection();
 
