@@ -1,6 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "npm:@hono/zod-openapi";
-// import { Context } from "hono";
-
 import { db } from "../main.ts";
 
 const transactions = new OpenAPIHono();

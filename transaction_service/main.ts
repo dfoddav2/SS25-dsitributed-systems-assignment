@@ -4,6 +4,7 @@ import { OpenAPIHono } from "npm:@hono/zod-openapi";
 import { swaggerUI } from "npm:@hono/swagger-ui";
 import transactions from "./routes/transactions.ts";
 import seedDatabase from "./utils/seed.ts";
+import { AUTHENTICATION_SERVICE_URL } from "./utils/config.ts";
 
 // Initialize the database
 export const db = new DatabaseSync("transactions.db");
@@ -91,7 +92,7 @@ app.use("/transactions/*", async (c, next) => {
   const authHeader = c.req.header("Authorization");
   if (authHeader && authHeader.startsWith("Bearer ")) {
     // Forward the auth header to the authentication service
-    const response = await fetch("http://localhost:8001/verify", {
+    const response = await fetch(`${AUTHENTICATION_SERVICE_URL}/verify`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -120,4 +121,7 @@ app.use("/transactions/*", async (c, next) => {
 app.route("/transactions", transactions);
 app.route("/", app);
 
-Deno.serve(app.fetch);
+Deno.serve(
+  { port: Number(Deno.env.get("TRANSACTION_SERVICE_PORT")) || 8000 },
+  app.fetch
+);

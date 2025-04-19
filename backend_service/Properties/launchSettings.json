@@ -1,0 +1,29 @@
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:8003",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "BACKEND_SERVICE_PORT": "8002",
+        "AUTHENTICATION_SERVICE_URL": "http://localhost:8001",
+        "TRANSACTION_SERVICE_URL": "http://localhost:8000"
+      }
+    },
+    "https": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7279;http://localhost:5275",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "BACKEND_SERVICE_PORT": "8002",
+        "AUTHENTICATION_SERVICE_URL": "http://localhost:8001",
+        "TRANSACTION_SERVICE_URL": "http://localhost:8000"
+      }
+    }
+  }
+}

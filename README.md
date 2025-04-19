@@ -12,6 +12,13 @@ A possible architecture for it looks as following, defined in the [assignment de
 
 The application is made up of several services, each with their own methods and custom settings to start with, thus running it can get quite complicated. It is recommended that you start it with the included docker compose.
 
+> [!NOTE]
+> The application by default will try and run on the following ports, make sure they are empty or change the configuration:
+>
+> - transaction_service: 8000
+> - authentication_service: 8001
+> - backend_service: 8002
+
 ### Via Docker
 
 Simply run in the root directory of the project:
@@ -25,6 +32,28 @@ This simply builds the `Dockerfiles` defined in their directories, using the `.e
 ### Manually
 
 To start a component manually check out the specific subheader for it under the [Project description](#project-description) section.
+
+## Testing guide
+
+As building a great UI is not part of the assignment, I opted to use Scalar and Swagger UI throughout the application. The following services have UIs:
+
+- `transaction_service`: Swagger
+- `backend_service`: Scalar
+
+They can both be reached at the `/ui` path. Note that the `backend_service` is the one consuming all other service's API in this case, e.g. logging in is only possible through here and thus I recommend using the Scalar interface. This service has its limitations though, not all of the endpoints regarding transactions and results have been consumed here.
+
+> [!NOTE]
+> When making requests to the `transaction_service` you will have to use an `Authorization` header in the format of:
+>
+> "`Bearer [JWT token from signin]`"
+
+As there is no easy frontend ui to register I recommend using these preseeded users for testing purposes:
+
+| Username      | Password    | User Role     |
+| ------------- | ----------- | ------------- |
+| secretary     | password123 | secretary     |
+| admin         | password123 | administrator |
+| agent         | password123 | agent         |
 
 ## Project description
 

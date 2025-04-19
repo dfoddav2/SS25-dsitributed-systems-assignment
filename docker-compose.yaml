@@ -7,7 +7,7 @@ services:
     ports:
       - "${TRANSACTION_SERVICE_PORT:-8000}:8000"
     env_file:
-      - ./transaction_service/.env
+      - ./transaction_service/.env.docker
 
   authentication_service:
     build:
@@ -17,4 +17,14 @@ services:
     ports:
       - "${AUTHENTICATION_SERVICE_PORT:-8001}:8001"
     env_file:
-      - ./authentication_service/.env
+      - ./authentication_service/.env.docker
+
+  backend_service:
+    build:
+      context: ./backend_service
+      dockerfile: Dockerfile
+    image: dfoddav/backend_service:latest
+    ports:
+      - "${BACKEND_SERVICE_PORT:-8002}:8002"
+    env_file:
+      - ./backend_service/.env.docker
