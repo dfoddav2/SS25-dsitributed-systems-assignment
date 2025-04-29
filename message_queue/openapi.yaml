@@ -1,0 +1,337 @@
+openapi: 3.1.1
+info:
+  title: Message Queue Service API
+  version: "1.0.0"
+  description: >
+    API for a message queue service that supports pushing new messages,
+    pulling the oldest message from the queue, and listing all messages.
+servers:
+  - url: http://localhost:{port}
+    description: Local server
+    variables:
+      port:
+        default: "8004"
+
+paths:
+  /:
+    get:
+      description: Returns a plain text greeting.
+      responses:
+        "200":
+          description: Successful response with a welcome message.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Hello from message queue service!
+
+  /push:
+    post:
+      description: >
+        Adds a new message to the queue defined in the body by queue_name, by pushing a transaction payload. (Only allowing Transaction type)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                queue_name:
+                  $ref: "#/components/schemas/MessageQueueName"
+                message:
+                  $ref: "#/components/schemas/Transaction"
+      responses:
+        "201":
+          description: Message successfully added to the queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Message has been added to queue {queue_name}
+        "400":
+          description: Invalid message format.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invalid message format
+                  message:
+                    type: array
+                    items:
+                      type: object
+        "404":
+          description: Queue not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Queue not found
+                  message:
+                    type: string
+                    example: Queue with name {name} not found
+        "500":
+          description: Error occurred while adding the message.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Failed to add message to queue
+
+  /pull:
+    get:
+      description: Removes the first (oldest) message from the queue named as in the query parameter and returns its content.
+      parameters:
+        - name: queue-name
+          in: query
+          required: true
+          description: The name of the message queue to list messages from.
+          schema:
+            $ref: "#/components/schemas/MessageQueueName"
+      responses:
+        "200":
+          description: Successfully pulled the oldest message.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "404":
+          description: The message queue with name does not exist, or no message is found in the queue.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - title: Queue Not Found
+                    type: object
+                    properties:
+                      error:
+                        type: string
+                        example: Queue not found
+                      message:
+                        type: string
+                        example: Queue with name {name} not found
+                  - title: No Message Found
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: No message found
+        "400":
+          description: Invalid queue name.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invalid message queue name format
+                  message:
+                    type: array
+                    items:
+                      type: object
+
+  /list:
+    get:
+      description: Retrieves all messages currently in the queue denoted by the queue_name query parameter.
+      parameters:
+        - name: queue-name
+          in: query
+          required: true
+          description: The name of the message queue to list messages from.
+          schema:
+            $ref: "#/components/schemas/MessageQueueName"
+      queryParamereters:
+        - name: queue_name
+          in: query
+          required: true
+          description: The name of the message queue to list messages from.
+          schema:
+            $ref: "#/components/schemas/MessageQueueName"
+      responses:
+        "200":
+          description: List of messages retrieved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Transaction"
+        "500":
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Failed to retrieve messages
+        "404":
+          description: The message queue with name does not exist.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Queue not found
+                  message:
+                    type: string
+                    example: Queue with name {name} not found
+        "400":
+          description: Invalid queue name.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invalid message queue name format
+                  message:
+                    type: array
+                    items:
+                      type: object
+
+  /create:
+    post:
+      description: >
+        Creates a new message queue with the specified name.
+        The name must be between 4 and 20 characters long.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  $ref: "#/components/schemas/MessageQueueName"
+      responses:
+        "201":
+          description: Message queue created successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Message queue created successfully
+        "400":
+          description: Invalid queue name.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invalid queue name format
+                  message:
+                    type: array
+                    items:
+                      type: object
+        "409":
+          description: Queue already exists.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Queue already exists
+                  message:
+                    type: string
+                    example: Queue with name {name} already exists
+
+  /delete:
+    delete:
+      description: >
+        Deletes the message queue with the specified name.
+        The name must be between 4 and 20 characters long.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  $ref: "#/components/schemas/MessageQueueName"
+      responses:
+        "200":
+          description: Message queue deleted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Message queue deleted successfully
+        "404":
+          description: Queue not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Queue not found
+                  message:
+                    type: string
+                    example: Queue with name {name} not found
+
+components:
+  schemas:
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          example: 1
+        customer_id:
+          type: integer
+          minimum: 1
+          example: 1
+        vendor_id:
+          type: integer
+          minimum: 1
+          example: 1
+        timestamp:
+          type: string
+          format: date-time
+          example: "2023-01-01T12:00:00Z"
+        status:
+          type: string
+          enum: [accepted, rejected, pending]
+          example: accepted
+        amount:
+          type: number
+          minimum: 0
+          example: 100
+    MessageQueueName:
+      type: string
+      example: transaction_queue
+      minimum: 4
+      maximum: 20

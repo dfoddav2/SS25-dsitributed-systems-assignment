@@ -1,0 +1,7 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save 20 1 --requirepass message_queue_password

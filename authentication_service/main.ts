@@ -129,7 +129,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   // Default response
-  return new Response("Authentication Service is running", { status: 200 });
+  return new Response(`Path: "${pathname}" not found`, { status: 404 });
 };
 
 // Logger middleware
