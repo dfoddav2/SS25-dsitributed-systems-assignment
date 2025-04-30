@@ -28,3 +28,22 @@ services:
       - "${BACKEND_SERVICE_PORT:-8002}:8002"
     env_file:
       - ./backend_service/.env.docker
+
+  message_queue_redis:
+    image: redis:7.4-alpine
+    container_name: message_queue_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save 20 1 --requirepass message_queue_password
+
+  message_queue:
+    build:
+      context: ./message_queue
+      dockerfile: Dockerfile
+    image: dfoddav/message_queue:latest
+    ports:
+      - "${MESSAGE_QUEUE_PORT:-8003}:8003"
+    env_file:
+      - ./message_queue/.env.docker
+    depends_on:
+      - message_queue_redis

@@ -15,9 +15,14 @@ The application is made up of several services, each with their own methods and 
 > [!NOTE]
 > The application by default will try and run on the following ports, make sure they are empty or change the configuration:
 >
-> - transaction_service: 8000
-> - authentication_service: 8001
-> - backend_service: 8002
+> | Service                | Port number |
+> | ---------------------- | ----------- |
+> | transaction_service    | 8000        |
+> | authentication_service | 8001        |
+> | backend_service        | 8002        |
+> | message_queue          | 8003        |
+>
+> For some of the services we were given specific endpoints to run on, I made changing of these port numbers very easy, but chose to use these ports, because they are close to each other and look nice.
 
 ### Via Docker
 
@@ -35,25 +40,30 @@ To start a component manually check out the specific subheader for it under the 
 
 ## Testing guide
 
-As building a great UI is not part of the assignment, I opted to use Scalar and Swagger UI throughout the application. The following services have UIs:
+As building a great UI is not part of the assignment, I opted to use Scalar and Swagger UI throughout the application. The following services have UIs available at their respective `/ui` endpoints:
 
-- `transaction_service`: Swagger
-- `backend_service`: Scalar
+| Service             | UI      |
+| ------------------- | ------- |
+| transaction_service | Swagger |
+| backend_service     | Scalar  |
+| message_queue       | Scalar  |
 
-They can both be reached at the `/ui` path. Note that the `backend_service` is the one consuming all other service's API in this case, e.g. logging in is only possible through here and thus I recommend using the Scalar interface. This service has its limitations though, not all of the endpoints regarding transactions and results have been consumed here.
+Note that the `backend_service` is the one consuming all other service's API in this case, e.g. logging in is only possible through here and thus I recommend using the Scalar interface. This service has its limitations though, not all of the endpoints regarding transactions and results have been consumed here.
+
+Message queue at the moment can only be interacted with through its Scalar interface.
 
 > [!NOTE]
-> When making requests to the `transaction_service` you will have to use an `Authorization` header in the format of:
+> When making requests to the `transaction_service` or `message_queue` you will have to use an `Authorization` header in the format of:
 >
 > "`Bearer [JWT token from signin]`"
 
 As there is no easy frontend ui to register I recommend using these preseeded users for testing purposes:
 
-| Username      | Password    | User Role     |
-| ------------- | ----------- | ------------- |
-| secretary     | password123 | secretary     |
-| admin         | password123 | administrator |
-| agent         | password123 | agent         |
+| Username  | Password    | User Role     |
+| --------- | ----------- | ------------- |
+| secretary | password123 | secretary     |
+| admin     | password123 | administrator |
+| agent     | password123 | agent         |
 
 ## Project description
 
@@ -78,3 +88,7 @@ To read more about this service, visit its [README file](./transaction_service/R
 The backend service is responsible for handling all interactions with the user through the frontend API. It exposes endpoints for the user to interact with the application and forwards those requests to their respective services to be handled, either the `Authentication Service` or the `Transaction Service`. Also exposes a Scalar UI interface for easy interaction and testing.
 
 To read more about this service, visit its [README file](./backend_service/README.md).
+
+### Message Queue
+
+This is a simple, self-made implementation of a message broker for our application specifically. It exposes CRUD operations for creating and interacting with message queues, and of course endpoints for pushing to and pulling from them. At the moment it simply stores and provides messages, with the added capability of persistently storing queues, making it able to continue from where it left off, in case of an outage for example.

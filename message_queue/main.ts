@@ -4,12 +4,16 @@ import { z } from "npm:zod";
 import {
   TransactionSchema,
   MessageQueueNamingSchema,
-} from "./utils/schemas.ts";
+} from "./types/schemas.ts";
 
 // Set up Redis client
 // https://docs.deno.com/examples/redis/
+console.log("Message Queue Service - v1.0.0");
+console.log("Connecting to Redis...");
 const redisPort = Number(Deno.env.get("REDIS_PORT")) || 6379;
-const redisConn = await Deno.connect({ port: redisPort });
+const redisHost = Deno.env.get("REDIS_HOST") || "127.0.0.1";
+console.log("Trying to connect to Redis at", redisHost, ":", redisPort);
+const redisConn = await Deno.connect({ hostname: redisHost, port: redisPort });
 const redisClient = new RedisClient(redisConn);
 await redisClient.sendCommand([
   "AUTH",
@@ -410,7 +414,7 @@ const handler = async (req: Request): Promise<Response> => {
             <script
               id="api-reference"
               data-url="http://localhost:${
-                Deno.env.get("MESSAGE_QUEUE_SERVICE_PORT") || 8004
+                Deno.env.get("MESSAGE_QUEUE_SERVICE_PORT") || 8003
               }/docs"></script>
             <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
           </body>
@@ -488,6 +492,6 @@ function loggerMiddleware(
 }
 
 Deno.serve(
-  { port: Number(Deno.env.get("MESSAGE_QUEUE_SERVICE_PORT")) || 8004 },
+  { port: Number(Deno.env.get("MESSAGE_QUEUE_SERVICE_PORT")) || 8003 },
   loggerMiddleware(handler)
 );

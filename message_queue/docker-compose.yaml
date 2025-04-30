@@ -1,7 +1,19 @@
 services:
-  redis:
+  message_queue_redis:
     image: redis:7.4-alpine
-    container_name: redis
+    container_name: message_queue_redis
     ports:
       - "6379:6379"
     command: redis-server --save 20 1 --requirepass message_queue_password
+
+  message_queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dfoddav/message_queue:latest
+    ports:
+      - "${MESSAGE_QUEUE_PORT:-8003}:8003"
+    env_file:
+      - .env.docker
+    depends_on:
+      - message_queue_redis

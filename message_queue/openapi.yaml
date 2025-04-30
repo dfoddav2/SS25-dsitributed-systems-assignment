@@ -10,7 +10,7 @@ servers:
     description: Local server
     variables:
       port:
-        default: "8004"
+        default: "8003"
 
 paths:
   /:
