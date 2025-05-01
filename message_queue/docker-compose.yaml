@@ -4,7 +4,7 @@ services:
     container_name: message_queue_redis
     ports:
       - "6379:6379"
-    command: redis-server --save 20 1 --requirepass message_queue_password
+    command: redis-server --save ${REDIS_SAVE_INTERVAL:-20} ${REDIS_SAVE_PER_CHANGES:-1} --requirepass ${REDIS_PASSWORD}
 
   message_queue:
     build:

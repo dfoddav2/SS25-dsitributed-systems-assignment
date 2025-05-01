@@ -7,7 +7,7 @@ services:
     ports:
       - "${TRANSACTION_SERVICE_PORT:-8000}:8000"
     env_file:
-      - ./transaction_service/.env.docker
+      - .env
 
   authentication_service:
     build:
@@ -17,7 +17,7 @@ services:
     ports:
       - "${AUTHENTICATION_SERVICE_PORT:-8001}:8001"
     env_file:
-      - ./authentication_service/.env.docker
+      - .env
 
   backend_service:
     build:
@@ -27,14 +27,14 @@ services:
     ports:
       - "${BACKEND_SERVICE_PORT:-8002}:8002"
     env_file:
-      - ./backend_service/.env.docker
+      - .env
 
   message_queue_redis:
     image: redis:7.4-alpine
     container_name: message_queue_redis
     ports:
       - "6379:6379"
-    command: redis-server --save 20 1 --requirepass message_queue_password
+    command: redis-server --save ${REDIS_SAVE_INTERVAL:-20} ${REDIS_SAVE_PER_CHANGES:-1} --requirepass ${REDIS_PASSWORD}
 
   message_queue:
     build:
@@ -44,6 +44,6 @@ services:
     ports:
       - "${MESSAGE_QUEUE_PORT:-8003}:8003"
     env_file:
-      - ./message_queue/.env.docker
+      - .env
     depends_on:
       - message_queue_redis

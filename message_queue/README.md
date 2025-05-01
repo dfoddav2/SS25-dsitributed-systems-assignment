@@ -28,9 +28,35 @@ In this case since I am using the built-in server of Deno, it was quite a challe
 
 ## Structure
 
-For this component, all of the business logic and setup is defined in [main.ts](./main.ts). Here you can find the logic from handling logins and registrations to verifying tokens.
+For this component, all of the business logic and setup is defined in [main.ts](./main.ts). Here you can find the logic of creating and managing message queues to pushing and pulling from them. You may see a very simple `handler` function set up that is our server logic, inside it we define our endpoints, including logic, docs and ui.
 
-TODO: Finish this
+### Middleware
+
+At the very and you may see that there are two middlewares wrapping our server handler:
+
+| Wrapper        | Use                                                          |
+| -------------- | ------------------------------------------------------------ |
+| Logger         | Logs a handful of details about the request and the response |
+| Authentication | Checks that user is authorized for the endpoint              |
+
+### Database - Persistence
+
+Since we have some level of persistence as a requirement we need some file storage or DB. I went for the more sophisticated approach in this case, opting I belive, for the best DBMS for the job, Redis.
+
+Redis is the fastest mainstream DB solution, running in-memory, has support for multiple levels of automatic saving for persistence even in case of a shutdown and is just very well suited for our use case as we don't store a lot of data at any point, there are no relations to speak of, just documents and we do very frequent operations. By default Redis also supports queues, no wonder they themselves offer their own [Message Broker service](https://redis.io/solutions/messaging/).
+
+In my solutiion persistence is two-fold, on one hand even if our Deno message queue server goes out, the Redis DB may still be running, on the other hand Redis has a way to auto-save state into a file for later restoration. You can see how it works in my `docker-compose.yaml` files, where I set up the service:
+
+```yaml
+message_queue_redis:
+  image: redis:7.4-alpine
+  container_name: message_queue_redis
+  ports:
+    - "6379:6379"
+  command: redis-server --save ${REDIS_SAVE_INTERVAL:-20} ${REDIS_SAVE_PER_CHANGES:-1} --requirepass ${REDIS_PASSWORD}
+```
+
+The `--save ${REDIS_SAVE_INTERVAL:-20} ${REDIS_SAVE_PER_CHANGES:-1}` part of the command means that it should save every N (default 20) seconds, given that there has been J (default 1) change at least.
 
 ## Technologies used
 
