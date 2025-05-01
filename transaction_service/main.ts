@@ -88,7 +88,7 @@ app.get("/", (c) => {
 
 // Middleware - Only allow authenticated AGENT and ADMINISTRATOR users to access the transactions routes
 app.use("/transactions/*", async (c, next) => {
-  console.log("\n--- Middleware for /transactions/* ---");
+  // console.log("\n--- Middleware for /transactions/* ---");
   const authHeader = c.req.header("Authorization");
   if (authHeader && authHeader.startsWith("Bearer ")) {
     // Forward the auth header to the authentication service

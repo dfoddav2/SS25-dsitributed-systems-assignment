@@ -5,6 +5,7 @@ import {
   TransactionSchema,
   MessageQueueNamingSchema,
 } from "./types/schemas.ts";
+import { AUTHENTICATION_SERVICE_URL } from "./utils/config.ts";
 
 // Set up Redis client
 // https://docs.deno.com/examples/redis/
@@ -491,7 +492,73 @@ function loggerMiddleware(
   };
 }
 
+const protectedPaths = ["/push", "/pull", "/list", "/create", "/delete"];
+const accessPolicy: Record<string, string[]> = {
+  "/push": ["agent", "administrator"],
+  "/pull": ["agent", "administrator"],
+  "/list": ["agent", "administrator"],
+  "/create": ["administrator"],
+  "/delete": ["administrator"],
+};
+
+function authMiddleware(
+  handler: (req: Request) => Promise<Response>
+): (req: Request) => Promise<Response> {
+  return async (req: Request) => {
+    // If the endpoint is not protected, skip authentication
+    const { pathname } = new URL(req.url);
+    if (!protectedPaths.includes(pathname)) {
+      return handler(req);
+    }
+    // Destructure the request to get Authorization header
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      // If no token is found, return 401 Unauthorized
+      return new Response(
+        JSON.stringify({
+          error: "Unauthorized",
+          message: "No token found in Authorization header",
+        }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    // Forward the auth header to the authentication service
+    const response = await fetch(`${AUTHENTICATION_SERVICE_URL}/verify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
+    });
+    // If the response is not ok, return 401 Unauthorized
+    if (!response.ok) {
+      console.log("User verification failed:", response.status);
+      return new Response(
+        JSON.stringify({
+          error: "Unauthorized",
+          message: "User verification failed",
+        }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    // Check user role validity for endpoint access
+    const data = await response.json();
+    if (!accessPolicy[pathname].includes(data.role)) {
+      return new Response(
+        JSON.stringify({
+          error: "Forbidden",
+          message: "You are not authorized to access this endpoint",
+        }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    // If all is okay, proceed to the handler
+    console.log("User verified:", data);
+    return handler(req);
+  };
+}
+
 Deno.serve(
   { port: Number(Deno.env.get("MESSAGE_QUEUE_SERVICE_PORT")) || 8003 },
-  loggerMiddleware(handler)
+  loggerMiddleware(authMiddleware(handler))
 );

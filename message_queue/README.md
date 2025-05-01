@@ -68,6 +68,8 @@ As there are not as many features and endpoints implemented by this service, I h
 
 ### Database
 
+I chose to use `Redis` for the reasons listed above in the section [Database - Persistence](#database---persistence).
+
 ## Docs
 
 - [Deno](https://docs.deno.com/)
