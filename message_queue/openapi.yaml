@@ -78,6 +78,19 @@ paths:
                   message:
                     type: string
                     example: Queue with name {name} not found
+        "409":
+          description: Queue is full
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Queue is full
+                  message:
+                    type: string
+                    example: Queue {queue_name} is full
         "500":
           description: Error occurred while adding the message.
           content:

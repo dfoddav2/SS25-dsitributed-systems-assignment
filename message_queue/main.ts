@@ -24,6 +24,8 @@ await redisClient.sendCommand([
 await redisClient.sendCommand(["FLUSHDB"]); // Clear the database
 
 const QUEUES_SET_NAME = "message_queues"; // Set name to store all queues in Redis
+const MAX_QUEUE_SIZE = Number(Deno.env.get("MAX_QUEUE_SIZE")) || 10;
+console.info("Max queue size:", MAX_QUEUE_SIZE);
 
 // Redis Queue - FIFO
 // https://redis.io/glossary/redis-queue/
@@ -82,6 +84,20 @@ const handler = async (req: Request): Promise<Response> => {
           { status: 400, headers: { "Content-Type": "application/json" } }
         );
       }
+    }
+    // Check that message queue is not full
+    const queueSize = (await redisClient.sendCommand([
+      "LLEN",
+      body.queue_name,
+    ])) as number;
+    if (queueSize >= MAX_QUEUE_SIZE) {
+      return new Response(
+        JSON.stringify({
+          error: "Queue is full",
+          message: `Queue ${body.queue_name} is full`,
+        }),
+        { status: 409, headers: { "Content-Type": "application/json" } }
+      );
     }
     // Now we can push the message to the queue - it exists and is valid
     console.log("Pushing message to queue:", JSON.stringify(body.message));

@@ -17,6 +17,12 @@ docker compose up redis
 deno run dev
 ```
 
+## Setting `.env` variables
+
+Main top level configurations can be changed through the [.env](./.env) file, including the maximum message queue size constraint, database save setting, and many others.
+
+Don't forget that there is a separate [.env.docker](./.env.docker) file for running inside Docker. This is needed, as Docker services communicate with each other through their service name resolution, instead of the localhost when running locally.
+
 ## Frontend UI
 
 As I did not want to spend too much time on implementing a custom frontend, I am simply using `Scalar`, which is a quick endpoint tester consuming OpenAPI documentation, quite alike `Swagger`. Once running, you can find it at [http://localhost:8003/ui]("http://localhost:8003/ui").
