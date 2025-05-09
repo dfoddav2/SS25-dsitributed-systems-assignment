@@ -45,7 +45,7 @@ Since we have some level of persistence as a requirement we need some file stora
 
 Redis is the fastest mainstream DB solution, running in-memory, has support for multiple levels of automatic saving for persistence even in case of a shutdown and is just very well suited for our use case as we don't store a lot of data at any point, there are no relations to speak of, just documents and we do very frequent operations. By default Redis also supports queues, no wonder they themselves offer their own [Message Broker service](https://redis.io/solutions/messaging/).
 
-In my solutiion persistence is two-fold, on one hand even if our Deno message queue server goes out, the Redis DB may still be running, on the other hand Redis has a way to auto-save state into a file for later restoration. You can see how it works in my `docker-compose.yaml` files, where I set up the service:
+In my solution persistence is two-fold, on one hand even if our Deno message queue server goes out, the Redis DB may still be running, on the other hand Redis has a way to auto-save state into a file for later restoration. You can see how it works in my `docker-compose.yaml` files, where I set up the service:
 
 ```yaml
 message_queue_redis:
@@ -59,6 +59,8 @@ message_queue_redis:
 The `--save ${REDIS_SAVE_INTERVAL:-20} ${REDIS_SAVE_PER_CHANGES:-1}` part of the command means that it should save every N (default 20) seconds, given that there has been J (default 1) change at least.
 
 ## Technologies used
+
+This component consist of a Deno server and a Redis database, now I will describe my rationale behind each.
 
 ### Server
 

@@ -92,3 +92,5 @@ To read more about this service, visit its [README file](./backend_service/READM
 ### Message Queue
 
 This is a simple, self-made implementation of a message broker for our application specifically. It exposes CRUD operations for creating and interacting with message queues, and of course endpoints for pushing to and pulling from them. At the moment it simply stores and provides messages, with the added capability of persistently storing queues, making it able to continue from where it left off, in case of an outage for example.
+
+To read more about this service, visit its [README file](./message_queue/README.md).
