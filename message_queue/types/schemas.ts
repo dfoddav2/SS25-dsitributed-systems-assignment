@@ -16,7 +16,6 @@ export const TransactionSchema = z.object({
 // Define Transaction schema
 // [{"id":1,"transaction_id":1,"timestamp":"2023-01-01T12:00:00Z","is_fraudulent":0,"confidence":0.95}]
 export const ResultSchema = z.object({
-  id: z.number().min(1),
   transaction_id: z.number().min(1),
   timestamp: z.string().refine((val) => !isNaN(Date.parse(val)), {
     message: "Invalid date format",

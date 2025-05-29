@@ -1,0 +1,6 @@
+mpi4py
+joblib
+pandas
+numpy
+requests
+python-dotenv

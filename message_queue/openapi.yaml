@@ -28,7 +28,7 @@ paths:
   /push:
     post:
       description: >
-        Adds a new message to the queue defined in the body by queue_name, by pushing a transaction payload. (Only allowing Transaction type)
+        Adds a new message to the queue defined in the body by queue_name, by pushing a Transaction or Result object.
       requestBody:
         required: true
         content:
@@ -39,7 +39,9 @@ paths:
                 queue_name:
                   $ref: "#/components/schemas/MessageQueueName"
                 message:
-                  $ref: "#/components/schemas/Transaction"
+                  oneOf:
+                    - $ref: "#/components/schemas/Transaction"
+                    - $ref: "#/components/schemas/Result"
       responses:
         "201":
           description: Message successfully added to the queue.
@@ -102,6 +104,88 @@ paths:
                     type: string
                     example: Failed to add message to queue
 
+  /push-n:
+    post:
+      description: >
+        Adds multiple messages to the queue defined in the body by queue_name, by pushing a list of transaction payloads.
+        The request body should contain an array of Transaction objects or Result objects.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                queue_name:
+                  $ref: "#/components/schemas/MessageQueueName"
+                messages:
+                  type: array
+                  items:
+                    oneOf:
+                      - $ref: "#/components/schemas/Transaction"
+                      - $ref: "#/components/schemas/Result"
+      responses:
+        "201":
+          description: Messages successfully added to the queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Messages have been added to queue {queue_name}
+        "400":
+          description: Invalid message format.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invalid message format
+                  message:
+                    type: array
+                    items:
+                      type: object
+        "404":
+          description: Queue not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Queue not found
+                  message:
+                    type: string
+                    example: Queue with name {name} not found
+        "409":
+          description: Queue is full.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Queue is full
+                  message:
+                    type: string
+                    example: Queue {queue_name} is full
+        "500":
+          description: Error occurred while adding the messages.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Failed to add messages to queue
+
   /pull:
     get:
       description: Removes the first (oldest) message from the queue named as in the query parameter and returns its content.
@@ -150,6 +234,69 @@ paths:
                   error:
                     type: string
                     example: Invalid message queue name format
+                  message:
+                    type: array
+                    items:
+                      type: object
+
+  /pull-n:
+    get:
+      description: >
+        Removes the first (oldest) N messages from the queue named as in the query parameter and returns their content. Utilizes long polling to wait for messages to be available if the queue is empty.
+        If there are fewer than N messages in the queue, it will return all available messages.
+        Else if the queue is empty, it will return 204 with an empty array.
+      parameters:
+        - name: queue-name
+          in: query
+          required: true
+          description: The name of the message queue to list messages from.
+          schema:
+            $ref: "#/components/schemas/MessageQueueName"
+        - name: count
+          in: query
+          required: true
+          description: The number of messages to pull from the queue.
+          schema:
+            type: integer
+            minimum: 1
+            example: 5
+      responses:
+        "200":
+          description: Successfully pulled the oldest N / less than N available messages.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Transaction"
+        "204":
+          description: No messages found in the queue, long polling did not yield any messages.
+        "404":
+          description: The message queue with name does not exist.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Queue not found
+                  message:
+                    type: string
+                    example: Queue with name {name} not found
+        "400":
+          description: Invalid queue name or count parameter.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invalid message queue name format or count parameter
                   message:
                     type: array
                     items:
@@ -343,8 +490,28 @@ components:
           type: number
           minimum: 0
           example: 100
+    Result:
+      type: object
+      properties:
+        transaction_id:
+          type: integer
+          minimum: 1
+          example: 1
+        timestamp:
+          type: string
+          format: date-time
+          example: "2023-01-01T12:00:00Z"
+        is_fraudulent:
+          type: number
+          enum: [0, 1]
+          example: 0
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          example: 0.95
     MessageQueueName:
       type: string
-      example: transaction_queue
+      example: transactions_queue
       minimum: 4
       maximum: 20

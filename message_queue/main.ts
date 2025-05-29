@@ -4,6 +4,7 @@ import { z } from "npm:zod";
 import {
   TransactionSchema,
   MessageQueueNamingSchema,
+  ResultSchema,
 } from "./types/schemas.ts";
 import { AUTHENTICATION_SERVICE_URL } from "./utils/config.ts";
 
@@ -11,9 +12,13 @@ import { AUTHENTICATION_SERVICE_URL } from "./utils/config.ts";
 // https://docs.deno.com/examples/redis/
 console.log("Message Queue Service - v1.0.0");
 console.log("Connecting to Redis...");
+
+const QUEUES_SET_NAME = "message_queues"; // Set name to store all queues in Redis
+const MAX_QUEUE_SIZE = Number(Deno.env.get("MAX_QUEUE_SIZE")) || 10;
 const redisPort = Number(Deno.env.get("REDIS_PORT")) || 6379;
 const redisHost = Deno.env.get("REDIS_HOST") || "127.0.0.1";
 console.log("Trying to connect to Redis at", redisHost, ":", redisPort);
+// General Redic client connection
 const redisConn = await Deno.connect({ hostname: redisHost, port: redisPort });
 const redisClient = new RedisClient(redisConn);
 await redisClient.sendCommand([
@@ -21,11 +26,21 @@ await redisClient.sendCommand([
   Deno.env.get("REDIS_USERNAME") || "default",
   Deno.env.get("REDIS_PASSWORD") || "message_queue_password",
 ]);
-await redisClient.sendCommand(["FLUSHDB"]); // Clear the database
+// Blocking Redis client connection for long polling of `ml_mpi_service`
+const blockingRedisConn = await Deno.connect({
+  hostname: redisHost,
+  port: redisPort,
+});
+const blockingRedisClient = new RedisClient(blockingRedisConn);
+await blockingRedisClient.sendCommand([
+  "AUTH",
+  Deno.env.get("REDIS_USERNAME") || "default",
+  Deno.env.get("REDIS_PASSWORD") || "message_queue_password",
+]);
 
-const QUEUES_SET_NAME = "message_queues"; // Set name to store all queues in Redis
-const MAX_QUEUE_SIZE = Number(Deno.env.get("MAX_QUEUE_SIZE")) || 10;
-console.info("Max queue size:", MAX_QUEUE_SIZE);
+await redisClient.sendCommand(["FLUSHDB"]); // Clear the database
+await redisClient.sendCommand(["SADD", QUEUES_SET_NAME, "transactions_queue"]);
+await redisClient.sendCommand(["SADD", QUEUES_SET_NAME, "results_queue"]);
 
 // Redis Queue - FIFO
 // https://redis.io/glossary/redis-queue/
@@ -65,7 +80,13 @@ const handler = async (req: Request): Promise<Response> => {
     }
     // Check if the message is valid
     try {
-      TransactionSchema.parse(body.message); // Validate the message against the schema
+      if ("is_fraudulent" in body.message) {
+        // If the message is a result, validate against ResultSchema
+        ResultSchema.parse(body.message);
+      } else {
+        // For now we just assume it's a transaction
+        TransactionSchema.parse(body.message); // Validate the message against the schema
+      }
     } catch (e) {
       if (e instanceof z.ZodError) {
         return new Response(
@@ -120,6 +141,124 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("Failed to add message to queue", result);
       return new Response(
         JSON.stringify({ message: "Failed to add message to queue" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+  }
+
+  // `/push-n` message queue endpoint
+  // - adds a new message to the queue and appends it to its end.
+  // - The message should include all the data fields defined in Assignment 2 for the transactions or the results table in the transaction service
+  // - same as `/push`, but allows to push multiple messages at once in an array
+  if (pathname === "/push-n" && req.method === "POST") {
+    const body = await req.json();
+    // Basic body structure validation
+    if (
+      !body.queue_name ||
+      !Array.isArray(body.messages) ||
+      body.messages.length === 0
+    ) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid request body",
+          message:
+            "Request must include 'queue_name' (string) and 'messages' (non-empty array).",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check if message queue exists
+    const queueExists = await redisClient.sendCommand([
+      "SISMEMBER",
+      QUEUES_SET_NAME,
+      body.queue_name,
+    ]);
+    console.log("Queue exists:", queueExists);
+    if (!queueExists) {
+      return new Response(
+        JSON.stringify({
+          error: "Queue does not exist",
+          message: `Queue ${body.queue_name} does not exist`,
+        }),
+        { status: 404, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    // Validate each message in the array
+    for (let i = 0; i < body.messages.length; i++) {
+      const message = body.messages[i];
+      try {
+        if (typeof message !== "object" || message === null) {
+          throw new Error("Message must be an object.");
+        }
+        if ("is_fraudulent" in message) {
+          ResultSchema.parse(message);
+        } else {
+          TransactionSchema.parse(message);
+        }
+      } catch (e) {
+        const errorMessage =
+          e instanceof z.ZodError
+            ? e.errors
+            : e instanceof Error
+            ? e.message
+            : "Unknown validation error";
+        return new Response(
+          JSON.stringify({
+            error: `Invalid message format for message at index ${i}`,
+            message: errorMessage,
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Check that message queue has capacity for all new messages
+    const currentQueueSize = (await redisClient.sendCommand([
+      "LLEN",
+      body.queue_name,
+    ])) as number;
+
+    if (currentQueueSize + body.messages.length > MAX_QUEUE_SIZE) {
+      return new Response(
+        JSON.stringify({
+          error: "Queue capacity exceeded",
+          message: `Queue ${body.queue_name} does not have enough space for ${body.messages.length} new messages. Current size: ${currentQueueSize}, Max size: ${MAX_QUEUE_SIZE}.`,
+        }),
+        { status: 409, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Now we can push all messages to the queue
+    // LPUSH prepends elements, so the last element in the command becomes the new head.
+    // This preserves the order of the input `messages` array for FIFO with RPOP.
+    const stringifiedMessages = body.messages.map((msg: z.infer<typeof TransactionSchema>) => JSON.stringify(msg));
+
+    console.log(
+      `Pushing ${stringifiedMessages.length} messages to queue: ${body.queue_name}`
+    );
+
+    const lpushCommandArgs = ["LPUSH", body.queue_name, ...stringifiedMessages];
+    const result = await redisClient.sendCommand(lpushCommandArgs);
+
+    if (typeof result === "number" && result > 0) {
+      // LPUSH returns the new length of the list
+      return new Response(
+        JSON.stringify({
+          message: `${body.messages.length} message(s) have been added to queue ${body.queue_name}. New queue size: ${result}.`,
+        }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    } else {
+      console.error("Failed to add messages to queue", result);
+      return new Response(
+        JSON.stringify({ message: "Failed to add messages to queue" }),
         {
           status: 500,
           headers: { "Content-Type": "application/json" },
@@ -204,6 +343,147 @@ const handler = async (req: Request): Promise<Response> => {
         headers: { "Content-Type": "application/json" },
       }
     );
+  }
+
+  // `/pull-n` message queue endpoint
+  // - long polling endpoint that waits for at least one message to be available in the queue
+  // - if no message is available, it will wait for up to 30 seconds
+  // - if a message is available, it will return up to `count` messages from the queue
+  // - if no messages are avialble, returns 204
+  // - if the queue does not exist, returns 404
+  if (pathname === "/pull-n" && req.method === "GET") {
+    const url = new URL(req.url);
+    const queueName = url.searchParams.get("queue-name");
+    const count = url.searchParams.get("count");
+
+    // Validate the queue name
+    if (!queueName) {
+      return new Response(
+        JSON.stringify({
+          error: "Queue name is required",
+          message: "Queue name is missing",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    // Validate the count parameter
+    if (!count || isNaN(Number(count)) || Number(count) <= 0) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid count parameter",
+          message: "Count must be a positive integer",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate the queue name format
+    try {
+      MessageQueueNamingSchema.parse({ name: queueName });
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        return new Response(
+          JSON.stringify({
+            error: "Invalid message queue name format",
+            message: e.errors,
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      } else {
+        return new Response(
+          JSON.stringify({
+            error: "Invalid name format",
+            message: "Unknown error",
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Check if the queue exists
+    const queueExists = await redisClient.sendCommand([
+      "SISMEMBER",
+      QUEUES_SET_NAME,
+      queueName,
+    ]);
+    console.log("Queue exists:", queueExists);
+    if (!queueExists) {
+      return new Response(
+        JSON.stringify({
+          error: "Queue does not exist",
+          message: `Queue ${queueName} does not exist`,
+        }),
+        { status: 404, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Use BLPOP to wait for messages in the queue
+    const timeout = 30; // Timeout in seconds
+    try {
+      // 1. Use BRPOP to wait for at least one message
+      console.log(
+        `[pull-n] Attempting BRPOP on queue "${queueName}" with dedicated client.`
+      );
+      const brpopResult = await blockingRedisClient.sendCommand([
+        "BRPOP",
+        queueName,
+        timeout.toString(),
+      ]);
+
+      if (!brpopResult) {
+        // BRPOP timed out - no messages available
+        console.log(
+          `[pull-n] BRPOP timed out for queue "${queueName}". No messages available within ${timeout}s.`
+        );
+        return new Response(null, { status: 204 }); // 204 No Content
+      }
+      // Check if brpopResult is an array before accessing its length
+      if (Array.isArray(brpopResult) && brpopResult.length > 0) {
+        const initialMessage = brpopResult[1] as string; // First message from BRPOP
+        const messages: string[] = [initialMessage]; // Start with the first message
+
+        // 2. Now, try to get the remaining messages (up to count - 1) using non-blocking RPOP
+        const remainingCount = Number(count) - 1;
+        for (let i = 0; i < remainingCount; i++) {
+          const rpopResult = await redisClient.sendCommand(["RPOP", queueName]);
+          if (rpopResult) {
+            messages.push(rpopResult as string);
+          } else {
+            // Queue is empty - no more messages
+            break;
+          }
+        }
+        console.log(
+          `[pull-n] Pulled ${messages.length} messages from queue "${queueName}".`
+        );
+
+        // 3. Return all messages as a JSON array
+        return new Response(JSON.stringify(messages), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      } else {
+        console.log(
+          `[pull-n] BRPOP returned an unexpected result for queue "${queueName}".`
+        );
+        return new Response(null, { status: 500 }); // 500 Internal Server Error
+      }
+    } catch (error) {
+      console.error(
+        `[pull-n] Error during BRPOP/RPOP for queue "${queueName}":`,
+        error
+      );
+      return new Response(
+        JSON.stringify({
+          error: "Failed to pull messages from queue due to a server error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Unknown Redis communication error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
   }
 
   // `/list` message queue endpoint
@@ -576,5 +856,6 @@ function authMiddleware(
 
 Deno.serve(
   { port: Number(Deno.env.get("MESSAGE_QUEUE_SERVICE_PORT")) || 8003 },
-  loggerMiddleware(authMiddleware(handler))
+  // loggerMiddleware(authMiddleware(handler))
+  loggerMiddleware(handler) // TODO: Turn on for hand in
 );
