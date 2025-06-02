@@ -21,6 +21,7 @@ The application is made up of several services, each with their own methods and 
 > | authentication_service | 8001        |
 > | backend_service        | 8002        |
 > | message_queue          | 8003        |
+> | ml_mpi_service         | NA          |
 >
 > For some of the services we were given specific endpoints to run on, I made changing of these port numbers very easy, but chose to use these ports, because they are close to each other and look nice.
 
@@ -56,6 +57,9 @@ Message queue at the moment can only be interacted with through its Scalar inter
 > When making requests to the `transaction_service` or `message_queue` you will have to use an `Authorization` header in the format of:
 >
 > "`Bearer [JWT token from signin]`"
+>
+> There is also a convenient way provided to turn off the authentication middlewares via `.env` variables.
+
 
 As there is no easy frontend ui to register I recommend using these preseeded users for testing purposes:
 
@@ -94,3 +98,9 @@ To read more about this service, visit its [README file](./backend_service/READM
 This is a simple, self-made implementation of a message broker for our application specifically. It exposes CRUD operations for creating and interacting with message queues, and of course endpoints for pushing to and pulling from them. At the moment it simply stores and provides messages, with the added capability of persistently storing queues, making it able to continue from where it left off, in case of an outage for example.
 
 To read more about this service, visit its [README file](./message_queue/README.md).
+
+### Machine Learning - MPI Service
+
+This is a continously working, efficient MPI service that looks for new messages on the message queue, fetches them by batches and utilizing a prebuilt machine learning model makes a prediction on whether the transaction received through the message is fraudulent or not. Processes the messages in parallel on multiple cores utilizing MPI, then in the end automatically posts the results back on to the message queue.#
+
+To read more about this service, visit its [README file](./ml_mpi_service/README.md).
