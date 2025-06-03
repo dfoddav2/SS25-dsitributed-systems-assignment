@@ -19,6 +19,10 @@ COMM = MPI.COMM_WORLD
 RANK = COMM.Get_rank()
 SIZE = COMM.Get_size()
 STOP_WORKER_SIGNAL = "STOP_WORKER_SIGNAL_XYZ"
+if SIZE <= 1:
+    print(
+        f"ERROR: This script requires at least 2 MPI processes (1 master + 1 worker). Aborting execution.")
+    COMM.Abort(1)  # Abort all MPI processes
 
 # Environment variables with defaults
 MQ_SERVICE_URL = os.getenv("MQ_SERVICE_URL", "http://localhost:8003")
@@ -28,23 +32,23 @@ RESULTS_QUEUE_NAME = os.getenv("RESULTS_QUEUE_NAME", "results_queue")
 MODEL_PATH = os.getenv("MODEL_PATH", "fraud_rf_model.pkl")
 HTTP_CLIENT_TIMEOUT = float(os.getenv("HTTP_CLIENT_TIMEOUT", "35.0"))
 FALLBACK_POLL_INTERVAL_SECONDS = float(
-    os.getenv("FALLBACK_POLL_INTERVAL_SECONDS", "1.0"))
+    os.getenv("FALLBACK_POLL_INTERVAL_SECONDS", "5.0"))
 
 
 def load_model(filename=MODEL_PATH):
     if not os.path.exists(filename):
         print(
-            f"[Process {RANK}] ERROR: Model file '{filename}' not found. Aborting MPI execution.")
+            f"[WORKER {RANK}] ERROR: Model file '{filename}' not found. Aborting MPI execution.")
         COMM.Abort(1)  # Abort all MPI processes
         raise FileNotFoundError(
             f'Model file with path "{filename}" not found.')
     try:
         model = joblib.load(filename)
-        print(f"[Process {RANK}] Model '{filename}' loaded successfully.")
+        print(f"[WORKER {RANK}] Model '{filename}' loaded successfully.")
         return model
     except Exception as e:
         print(
-            f"[Process {RANK}] ERROR: Failed to load model '{filename}': {e}. Aborting MPI execution.")
+            f"[WORKER {RANK}] ERROR: Failed to load model '{filename}': {e}. Aborting MPI execution.")
         COMM.Abort(1)
         raise
 
@@ -73,25 +77,30 @@ def fetch_batch_from_deno_mq(session, count):
             else:
                 print(
                     f"[MASTER {RANK}] Error: /pull-n did not return a list. Got: {type(tasks)}")
-                return []  # Return empty list on unexpected format
-        elif response.status_code == 204:  # No content, queue was empty during long poll
+                return []
+        elif response.status_code == 204:
             # print(f"[MASTER {RANK}] /pull-n returned 204 No Content (queue empty).")
             return []
         else:
             print(
-                f"[MASTER {RANK}] Error fetching batch from Deno MQ (/pull-n): {response.status_code} - {response.text}")
+                f"\nWARNING: Error fetching batch from Deno MQ (/pull-n): {response.status_code} - {response.text}\n")
             return []
     except requests.exceptions.Timeout:
         print(
-            f"[MASTER {RANK}] HTTP Request to /pull-n timed out after {HTTP_CLIENT_TIMEOUT}s.")
+            f"\nWARNING: HTTP Request to /pull-n timed out after {HTTP_CLIENT_TIMEOUT}s.\n")
         return []
     except requests.exceptions.RequestException as e:
-        print(
-            f"[MASTER {RANK}] HTTP Request failed when pulling batch (/pull-n): {e}")
+        error_msg = str(e)
+        if "Connection refused" in error_msg:
+            print(
+                f"\nWARNING: Is the message_queue running? HTTP Request failed when pulling batch (/pull-n):\n{error_msg}\n")
+        else:
+            print(
+                f"\nWARNING: HTTP Request failed when pulling batch (/pull-n): {error_msg}\n")
         return []
     except json.JSONDecodeError as e:
         print(
-            f"[MASTER {RANK}] Failed to decode JSON response from Deno /pull-n: {e}")
+            f"\nWARNING: Failed to decode JSON response from Deno /pull-n: {e}\n")
         return []
 
 
@@ -100,15 +109,12 @@ def push_batch_to_deno_mq(session, results_batch):
     if not results_batch:
         return True  # Nothing to push
     try:
-        push_url = f"{MQ_SERVICE_URL}/push-n"  # Assuming /push-n endpoint
-        # Deno /push-n should expect a payload like:
-        # {"queue_name": "results_queue", "messages": [result1, result2, ...]}
+        push_url = f"{MQ_SERVICE_URL}/push-n"
         payload = {
             "queue_name": RESULTS_QUEUE_NAME,
             "messages": results_batch  # Send the list of result dicts
         }
         # print(f"[MASTER {RANK}] Pushing batch of {len(results_batch)} results to /push-n.")
-        # Increased timeout for batch
         response = session.post(push_url, json=payload,
                                 timeout=HTTP_CLIENT_TIMEOUT)
         if response.status_code == 201:
@@ -116,9 +122,14 @@ def push_batch_to_deno_mq(session, results_batch):
                 f"[MASTER {RANK}] Successfully pushed batch of {len(results_batch)} results.")
             return True
         else:
-            print(
-                f"[MASTER {RANK}] Error pushing batch to Deno MQ (/push-n): {response.status_code} - {response.text}")
-            return False
+            if response.status_code == 409:
+                print(
+                    f"\nWARNING: Queue {RESULTS_QUEUE_NAME} is full (409 Conflict). Dropping batch. (MASTER {RANK})\n")
+                return False
+            else:
+                print(
+                    f"[MASTER {RANK}] Error pushing batch to Deno MQ (/push-n): {response.status_code} - {response.text}")
+                return False
     except requests.exceptions.RequestException as e:
         print(
             f"[MASTER {RANK}] HTTP Request failed when pushing batch (/push-n): {e}")
@@ -134,13 +145,14 @@ def run_master_node():
 
     try:
         while True:
-            # Fetch a batch of tasks, up to the number of workers
-            # Fetch 1 if no workers (though master shouldn't run alone)
             tasks_to_process = fetch_batch_from_deno_mq(
                 http_session, num_workers if num_workers > 0 else 1)
 
             if not tasks_to_process:
-                # print(f"[MASTER {RANK}] No tasks fetched from /pull-n. Deno MQ might be empty or timed out (204).")
+                print(
+                    f"[MASTER {RANK}] No tasks fetched from /pull-n. Deno MQ might be empty or timed out (204).")
+                print(
+                    f"Sleeping {FALLBACK_POLL_INTERVAL_SECONDS} seconds before retrying...")
                 time.sleep(FALLBACK_POLL_INTERVAL_SECONDS)
                 continue
 
@@ -172,10 +184,6 @@ def run_master_node():
                             "error": f"Failed to receive result from worker {worker_rank}",
                             "is_fraudulent": -1, "confidence": 0.0
                         })
-            elif num_workers == 0:  # Should be handled by SIZE == 1 case, but as a safeguard
-                print(
-                    f"[MASTER {RANK}] Warning: Master node running without workers. This case should be handled by standalone mode.")
-                pass
 
             if results_from_workers:
                 if push_batch_to_deno_mq(http_session, results_from_workers):
@@ -184,8 +192,6 @@ def run_master_node():
                 else:
                     print(
                         f"[MASTER {RANK}] Failed to push batch of {len(results_from_workers)} results via /push-n.")
-
-            # print(f"[MASTER {RANK}] Batch processed. {num_actual_tasks} tasks handled.")
 
     except KeyboardInterrupt:
         print(f"[MASTER {RANK}] KeyboardInterrupt. Shutting down workers...")
@@ -215,7 +221,7 @@ def preprocess_transaction_data(transaction_data: dict):
     The order of features must match the training: id, vendor_id, timestamp, status, amount.
     """
     print(
-        f"[Process {RANK}] Preprocessing transaction data: {transaction_data.get('id')}")
+        f"[WORKER {RANK}] Preprocessing transaction data: {transaction_data.get('id')}")
     try:
         # 1. Timestamp processing: Convert ISO string to Unix timestamp (float)
         # Example: "2023-01-01T12:00:00Z"
@@ -229,7 +235,7 @@ def preprocess_transaction_data(transaction_data: dict):
             'status', '').lower(), -1)  # Default to -1 if unknown
         if status_numeric == -1:
             print(
-                f"[Process {RANK}] Warning: Unknown status '{transaction_data.get('status')}' for transaction {transaction_data.get('id')}. Using -1.")
+                f"\nWARNING: Unknown status '{transaction_data.get('status')}' for transaction {transaction_data.get('id')}. Using -1. (WORKER {RANK})\n")
 
         # 3. Extract other features, ensuring correct types
         feature_values = [
@@ -243,7 +249,7 @@ def preprocess_transaction_data(transaction_data: dict):
         return df_features
     except Exception as e:
         print(
-            f"[Process {RANK}] Error preprocessing transaction {transaction_data.get('id', 'N/A')}: {e}")
+            f"[WORKER {RANK}] Error preprocessing transaction {transaction_data.get('id', 'N/A')}: {e}")
         return None
 
 
@@ -252,14 +258,14 @@ def make_prediction(model, features_df: pd.DataFrame, transaction_id="N/A"):
     Makes a prediction using the loaded model and preprocessed features (Pandas DataFrame).
     """
     print(
-        f"[Process {RANK}] Making prediction for transaction: {transaction_id}")
+        f"[WORKER {RANK}] Making prediction for transaction: {transaction_id}")
     if model is None:
         print(
-            f"[Process {RANK}] Error: Model not loaded for transaction {transaction_id}.")
+            f"[WORKER {RANK}] Error: Model not loaded for transaction {transaction_id}.")
         return {"transaction_id": transaction_id, "error": "Model not loaded", "is_fraudulent": -1, "confidence": 0.0}
     if not isinstance(features_df, pd.DataFrame):
         print(
-            f"[Process {RANK}] Error: Features for transaction {transaction_id} are not a Pandas DataFrame.")
+            f"[WORKER {RANK}] Error: Features for transaction {transaction_id} are not a Pandas DataFrame.")
         return {"transaction_id": transaction_id, "error": "Invalid feature format (not DataFrame)", "is_fraudulent": -1, "confidence": 0.0}
 
     try:
@@ -271,11 +277,11 @@ def make_prediction(model, features_df: pd.DataFrame, transaction_id="N/A"):
         confidence = float(probabilities[0][is_fraudulent])
 
         print(
-            f"[Process {RANK}] Prediction for {transaction_id}: Fraudulent={is_fraudulent}, Confidence={confidence:.4f}")
+            f"[WORKER {RANK}] Prediction for {transaction_id}: Fraudulent={is_fraudulent}, Confidence={confidence:.4f}")
         return {"transaction_id": transaction_id, "timestamp": datetime.now().isoformat(), "is_fraudulent": is_fraudulent, "confidence": confidence}
     except Exception as e:
         print(
-            f"[Process {RANK}] Error during prediction for transaction {transaction_id}: {e}")
+            f"[WORKER {RANK}] Error during prediction for transaction {transaction_id}: {e}")
         return {"transaction_id": transaction_id, "error": str(e), "is_fraudulent": -1, "confidence": 0.0}
 
 
@@ -311,75 +317,19 @@ def run_worker_node(model):
         print(f"[WORKER {RANK}] Shutdown.")
 
 
-def run_standalone_node(model):
-    """Logic for when SIZE = 1 (single process mode, uses HTTP batch endpoints)."""
-    print(
-        f"[STANDALONE {RANK}] Running in single process mode. Using Deno MQ at {MQ_SERVICE_URL}")
-    http_session = requests.Session()
-    try:
-        while True:
-            # Fetch one task using the batch endpoint
-            tasks_batch = fetch_batch_from_deno_mq(http_session, count=1)
-
-            if not tasks_batch:
-                # print(f"[STANDALONE {RANK}] No task fetched. Sleeping for {FALLBACK_POLL_INTERVAL_SECONDS}s.")
-                time.sleep(FALLBACK_POLL_INTERVAL_SECONDS)
-                continue
-
-            task_data = tasks_batch[0]  # Get the single task from the list
-            transaction_id = task_data.get("id", "N/A")
-            print(
-                f"[STANDALONE {RANK}] Processing task for transaction: {transaction_id}")
-
-            features = preprocess_transaction_data(task_data)
-            if features:
-                prediction_result = make_prediction(
-                    model, features, transaction_id)
-            else:
-                prediction_result = {
-                    "transaction_id": transaction_id, "timestamp": datetime.now().isoformat(),
-                    "is_fraudulent": -1, "confidence": 0.0
-                }
-
-            # Push the single result using the batch endpoint
-            # Send as a list
-            if push_batch_to_deno_mq(http_session, [prediction_result]):
-                print(
-                    f"[STANDALONE {RANK}] Pushed result for transaction {transaction_id} via /push-n.")
-            else:
-                print(
-                    f"[STANDALONE {RANK}] Failed to push result for transaction {transaction_id} via /push-n.")
-
-    except KeyboardInterrupt:
-        print(f"[STANDALONE {RANK}] KeyboardInterrupt. Shutting down.")
-    finally:
-        http_session.close()
-        print(f"[STANDALONE {RANK}] Shutdown complete.")
-
-
 # --- Main Execution ---
 if __name__ == "__main__":
-    # Load the model only if RANK > 0 (workers) or SIZE == 1 (standalone node)
-    ml_model = None
-    if RANK > 0 or SIZE == 1:  # Workers and standalone node load the model
+    # Split execution based on the RANK
+    if RANK == 0:  # Master
+        print(f"[MASTER {RANK}] Started master node...")
+        run_master_node()
+    else:  # Workers
+        print(f"[WORKER {RANK}] Started worker node...")
         ml_model = load_model(MODEL_PATH)  # Define or import load_model
-        if not ml_model and SIZE > 1:  # If worker fails to load model
+        if not ml_model:  # If worker fails to load model
             print(
                 f"[WORKER {RANK}] Failed to load model. Worker cannot proceed.")
             COMM.Abort(1)  # Signal other processes to abort
-        elif not ml_model and SIZE == 1:
-            print(f"[STANDALONE {RANK}] Failed to load model. Cannot proceed.")
-            exit(1)
-
-    # Split execution based on the number of processes / and RANK
-    if SIZE == 1:
-        if ml_model:
-            run_standalone_node(ml_model)
-    else:  # SIZE > 1
-        if RANK == 0:  # Master
-            run_master_node()
-        else:  # Workers
-            if ml_model:  # Ensure model was loaded
-                run_worker_node(ml_model)
+        run_worker_node(ml_model)
 
     print(f"[Process {RANK}] Finalizing.")

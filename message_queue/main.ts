@@ -13,6 +13,8 @@ import { AUTHENTICATION_SERVICE_URL } from "./utils/config.ts";
 console.log("Message Queue Service - v1.0.0");
 console.log("Connecting to Redis...");
 
+const SKIP_AUTHENTICATION =
+  Boolean(Deno.env.get("SKIP_MESSAGE_QUEUE_AUTHENTICATION")) || false;
 const QUEUES_SET_NAME = "message_queues"; // Set name to store all queues in Redis
 const MAX_QUEUE_SIZE = Number(Deno.env.get("MAX_QUEUE_SIZE")) || 10;
 const redisPort = Number(Deno.env.get("REDIS_PORT")) || 6379;
@@ -41,6 +43,8 @@ await blockingRedisClient.sendCommand([
 await redisClient.sendCommand(["FLUSHDB"]); // Clear the database
 await redisClient.sendCommand(["SADD", QUEUES_SET_NAME, "transactions_queue"]);
 await redisClient.sendCommand(["SADD", QUEUES_SET_NAME, "results_queue"]);
+
+console.log("Connected to Redis successfully! Database flushed.");
 
 // Redis Queue - FIFO
 // https://redis.io/glossary/redis-queue/
@@ -235,7 +239,9 @@ const handler = async (req: Request): Promise<Response> => {
     // Now we can push all messages to the queue
     // LPUSH prepends elements, so the last element in the command becomes the new head.
     // This preserves the order of the input `messages` array for FIFO with RPOP.
-    const stringifiedMessages = body.messages.map((msg: z.infer<typeof TransactionSchema>) => JSON.stringify(msg));
+    const stringifiedMessages = body.messages.map(
+      (msg: z.infer<typeof TransactionSchema>) => JSON.stringify(msg)
+    );
 
     console.log(
       `Pushing ${stringifiedMessages.length} messages to queue: ${body.queue_name}`
@@ -854,8 +860,21 @@ function authMiddleware(
   };
 }
 
+console.log(
+  `Routes initialized, visit http://localhost:${
+    Deno.env.get("MESSAGE_QUEUE_SERVICE_PORT") || 8003
+  }/ui to see the Scalar UI.`
+);
+
 Deno.serve(
   { port: Number(Deno.env.get("MESSAGE_QUEUE_SERVICE_PORT")) || 8003 },
-  // loggerMiddleware(authMiddleware(handler))
-  loggerMiddleware(handler) // TODO: Turn on for hand in
+  (req) => {
+    if (SKIP_AUTHENTICATION) {
+      console.log("Skipping authentication for message queue service");
+      return loggerMiddleware(handler)(req);
+    } else {
+      console.log("Authentication enabled for message queue service");
+      return authMiddleware(loggerMiddleware(handler))(req);
+    }
+  }
 );

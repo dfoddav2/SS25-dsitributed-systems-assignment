@@ -24,23 +24,22 @@ After this I have outsourced the endpoints to different files in the `/routes` d
 
 Defines CRUD operations related to transactions.
 
-TODO: Define more in detail
+- GET /: Retrieves a list of all transactions.
+- POST /: Creates a new transaction.
+- GET /{id}: Retrieves a specific transaction by its ID.
+- PATCH /{id}: Partially updates an existing transaction by its ID.
 
 ### Results
 
 Defines CRUD operations related to prediction results on whether the given transaction is fraudulent or not.
 
-TODO: Define more in detail
+It defines similar routes to the ones of transactions, but they are not used, nor have been tested yet as this is not a requirement of the assignments yet, but is a likely upcoming feature.
 
 ### Seed
 
 It can be found in [seed.ts](./utils/seed.ts) and is called in [main.ts](./main.ts), right after initializing the database, creating the transactions and result table if it doesn't exist yet and prefilling with some arbirtrary records.
 
-For authenticating you may use any of the predefined user's from the `authentication_service`:
-
--
--
--
+For authenticating you may use any of the predefined user's from the `authentication_service` as shown in the main repository [README](../README.md).
 
 Or create your own.
 

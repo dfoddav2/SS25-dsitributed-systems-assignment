@@ -47,3 +47,13 @@ services:
       - .env
     depends_on:
       - message_queue_redis
+
+  ml_mpi_service:
+    build:
+      context: ./ml_mpi_service
+      dockerfile: Dockerfile
+    image: dfoddav/ml_mpi_service:latest
+    env_file:
+      - .env
+    depends_on:
+      - message_queue

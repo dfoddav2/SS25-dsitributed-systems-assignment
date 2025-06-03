@@ -3,4 +3,5 @@ joblib
 pandas
 numpy
 requests
+scikit-learn
 python-dotenv

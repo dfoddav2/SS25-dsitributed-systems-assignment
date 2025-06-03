@@ -4,7 +4,13 @@ import { OpenAPIHono } from "npm:@hono/zod-openapi";
 import { swaggerUI } from "npm:@hono/swagger-ui";
 import transactions from "./routes/transactions.ts";
 import seedDatabase from "./utils/seed.ts";
-import { AUTHENTICATION_SERVICE_URL } from "./utils/config.ts";
+import {
+  AUTHENTICATION_SERVICE_URL,
+  SKIP_AUTHENTICATION,
+} from "./utils/config.ts";
+
+console.log("Transaction Service - v1.0.0");
+console.log("Connecting to `transactions.db`...");
 
 // Initialize the database
 export const db = new DatabaseSync("transactions.db");
@@ -87,39 +93,48 @@ app.get("/", (c) => {
 });
 
 // Middleware - Only allow authenticated AGENT and ADMINISTRATOR users to access the transactions routes
-app.use("/transactions/*", async (c, next) => {
-  // console.log("\n--- Middleware for /transactions/* ---");
-  const authHeader = c.req.header("Authorization");
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    // Forward the auth header to the authentication service
-    const response = await fetch(`${AUTHENTICATION_SERVICE_URL}/verify`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-      },
-    });
-    if (response.ok) {
-      const data = await response.json();
-      // console.log("User verified:", data);
-      if (data.role !== "agent" && data.role !== "administrator") {
-        console.log("User role is not allowed:", data.role);
-        return c.json({ message: "Forbidden" }, 403);
+if (SKIP_AUTHENTICATION) {
+  console.log("Skipping authentication for transactions service");
+} else {
+  console.log("Authentication enabled for transactions service");
+  app.use("/transactions/*", async (c, next) => {
+    // console.log("\n--- Middleware for /transactions/* ---");
+    const authHeader = c.req.header("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      // Forward the auth header to the authentication service
+      const response = await fetch(`${AUTHENTICATION_SERVICE_URL}/verify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // console.log("User verified:", data);
+        if (data.role !== "agent" && data.role !== "administrator") {
+          console.log("User role is not allowed:", data.role);
+          return c.json({ message: "Forbidden" }, 403);
+        }
+        await next();
+      } else {
+        console.log("User verification failed:", response.status);
+        return c.json({ message: "Unauthorized" }, 401);
       }
-      await next();
     } else {
-      console.log("User verification failed:", response.status);
+      console.log("No token found in Authorization header");
       return c.json({ message: "Unauthorized" }, 401);
     }
-  } else {
-    console.log("No token found in Authorization header");
-    return c.json({ message: "Unauthorized" }, 401);
-  }
-});
+  });
+}
 
 // Routes
 app.route("/transactions", transactions);
 app.route("/", app);
+
+console.log(
+  "Routes initialized, visit http://localhost:8000/ui to see the Swagger UI."
+);
 
 Deno.serve(
   { port: Number(Deno.env.get("TRANSACTION_SERVICE_PORT")) || 8000 },
