@@ -21,6 +21,8 @@ deno run dev
 
 Main top level configurations can be changed through the [.env](./.env) file, including the maximum message queue size constraint, database save setting, and many others.
 
+The main `.env` variable you may want to set is `SKIP_MESSAGE_QUEUE_AUTHENTICATION` as it makes testing a lot easier by skipping the middleware.
+
 Don't forget that there is a separate [.env.docker](./.env.docker) file for running inside Docker. This is needed, as Docker services communicate with each other through their service name resolution, instead of the localhost when running locally.
 
 ## Frontend UI

@@ -101,6 +101,6 @@ To read more about this service, visit its [README file](./message_queue/README.
 
 ### Machine Learning - MPI Service
 
-This is a continously working, efficient MPI service that looks for new messages on the message queue, fetches them by batches and utilizing a prebuilt machine learning model makes a prediction on whether the transaction received through the message is fraudulent or not. Processes the messages in parallel on multiple cores utilizing MPI, then in the end automatically posts the results back on to the message queue.#
+This is a continously working, efficient MPI service that looks for new messages on the message queue, fetches them by batches and utilizing a prebuilt machine learning model makes a prediction on whether the transaction received through the message is fraudulent or not. It processes the messages in parallel on multiple cores utilizing MPI, then in the end automatically posts the results back on to the message queue.#
 
 To read more about this service, visit its [README file](./ml_mpi_service/README.md).

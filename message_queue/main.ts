@@ -115,7 +115,7 @@ const handler = async (req: Request): Promise<Response> => {
       "LLEN",
       body.queue_name,
     ])) as number;
-    if (queueSize >= MAX_QUEUE_SIZE) {
+    if (queueSize >= MAX_QUEUE_SIZE && body.queue_name !== "results_queue") {
       return new Response(
         JSON.stringify({
           error: "Queue is full",
